@@ -5,11 +5,14 @@ from dataset_utils import _dataset_exists, _get_filenames_and_classes, write_lab
 #====================================================DEFINE YOUR ARGUMENTS=======================================================================
 flags = tf.app.flags
 
-#State your dataset directory
+# State your dataset directory
 flags.DEFINE_string('dataset_dir', None, 'String: Your dataset directory')
 
+# Specify dataset usage.
+flags.DEFINE_float('is_training', 1, 'Float: 1 for training, 0 for testing')
+
 # The number of images in the validation set. You would have to know the total number of examples in advance. This is essentially your evaluation dataset.
-flags.DEFINE_float('validation_size', 0.3, 'Float: The proportion of examples in the dataset to be used for validation')
+flags.DEFINE_float('validation_size', 0.1, 'Float: The proportion of examples in the dataset to be used for validation')
 
 # The number of shards to split the dataset into
 flags.DEFINE_integer('num_shards', 2, 'Int: Number of shards to split the TFRecord files')
@@ -45,20 +48,33 @@ def main():
     #Refer each of the class name to a specific integer number for predictions later
     class_names_to_ids = dict(zip(class_names, range(len(class_names))))
 
-    #Find the number of validation examples we need
-    num_validation = int(FLAGS.validation_size * len(photo_filenames))
-
     # Divide the training datasets into train and test:
     random.seed(FLAGS.random_seed)
     random.shuffle(photo_filenames)
-    training_filenames = photo_filenames[num_validation:]
-    validation_filenames = photo_filenames[:num_validation]
 
-    # First, convert the training and validation sets.
-    _convert_dataset('train', training_filenames, class_names_to_ids,
-                     dataset_dir = FLAGS.dataset_dir, tfrecord_filename = FLAGS.tfrecord_filename, _NUM_SHARDS = FLAGS.num_shards)
-    _convert_dataset('validation', validation_filenames, class_names_to_ids,
-                     dataset_dir = FLAGS.dataset_dir, tfrecord_filename = FLAGS.tfrecord_filename, _NUM_SHARDS = FLAGS.num_shards)
+    if FLAGS.is_training:
+      #Find the number of validation examples we need
+      num_validation = int(FLAGS.validation_size * len(photo_filenames)) \
+                       if FLAGS.validation_size <= 1 else int(FLAGS.validation_size)
+      training_filenames = photo_filenames[num_validation:]
+      validation_filenames = photo_filenames[:num_validation]
+
+      print("# training:", len(training_filenames))
+      print("# validation:", len(validation_filenames))
+
+      # First, convert the training and validation sets.
+      if len(training_filenames) > 0:
+          _convert_dataset('train', training_filenames, class_names_to_ids,
+                           dataset_dir = FLAGS.dataset_dir, tfrecord_filename = FLAGS.tfrecord_filename, _NUM_SHARDS = FLAGS.num_shards)
+      if len(validation_filenames) > 0:
+          _convert_dataset('validation', validation_filenames, class_names_to_ids,
+                           dataset_dir = FLAGS.dataset_dir, tfrecord_filename = FLAGS.tfrecord_filename, _NUM_SHARDS = FLAGS.num_shards)
+    else:
+      test_filenames = photo_filenames
+      print("# test:", len(test_filenames))
+      if len(test_filenames) > 0:
+          _convert_dataset('test', test_filenames, class_names_to_ids,
+                           dataset_dir = FLAGS.dataset_dir, tfrecord_filename = FLAGS.tfrecord_filename, _NUM_SHARDS = FLAGS.num_shards)
 
     # Finally, write the labels file:
     labels_to_class_names = dict(zip(range(len(class_names)), class_names))
